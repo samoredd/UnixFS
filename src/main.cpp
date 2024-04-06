@@ -1,19 +1,23 @@
+#include "../include/config.h"
+#include "../include/FileManager.h"
 #include "../include/InodeManager.h"
 #include "../include/BlockManager.h"
 #include "../include/DirectoryManager.h"
-#include "../include/FileManager.h"
-#include "../include/config.h"
 #include "../include/SuperBlock.h"
 #include <iostream>
 #include <string>
+#include <cstring>
 #include <mutex>
+#include <sstream>
 
 std::mutex fileSystemMutex;
 
-void formatDisk() {
+void formatDisk()
+{
     DirectoryManager::blockDevice.open("fs.img", std::ios::in | std::ios::out | std::ios::binary | std::ios::trunc);
 
-    if (!DirectoryManager::blockDevice) {
+    if (!DirectoryManager::blockDevice)
+    {
         std::cerr << "Error: Failed to open the block device file." << std::endl;
         return;
     }
@@ -26,7 +30,8 @@ void formatDisk() {
     DirectoryManager::blockDevice.write(reinterpret_cast<char *>(&superBlock), sizeof(SuperBlock));
 
     InodeManager::inodes.resize(MAX_FILES);
-    for (int i = 0; i < MAX_FILES; ++i) {
+    for (int i = 0; i < MAX_FILES; ++i)
+    {
         Inode inode;
         inode.id = i;
         inode.isDirectory = false;
@@ -48,56 +53,124 @@ void formatDisk() {
     std::cout << "Disk formatted successfully." << std::endl;
 }
 
-int main() {
+void displayHelp()
+{
+    std::cout << "Available commands:" << std::endl;
+    std::cout << "  create <filename> <content>   Create a new file with the specified content" << std::endl;
+    std::cout << "  read <filename>               Read the content of a file" << std::endl;
+    std::cout << "  delete <filename>             Delete a file" << std::endl;
+    std::cout << "  mkdir <directory>             Create a new directory" << std::endl;
+    std::cout << "  ls <directory>                List the contents of a directory" << std::endl;
+    std::cout << "  help                          Display this help message" << std::endl;
+    std::cout << "  exit                          Exit the program" << std::endl;
+}
+
+int main(int argc, char *argv[])
+{
     formatDisk();
 
-    const char *data = "Hello, World!";
-    FileManager::createFile("test.txt", data, strlen(data), 0, 0);
-    FileManager::readFile("test.txt");
+    displayHelp();
 
-    // Test case 1: Creating a file
-    std::string fileName1 = "file1.txt";
-    const char *data1 = "This is the content of file1.";
-    size_t dataSize1 = strlen(data1);
-    fileSystemMutex.lock();
-    FileManager::createFile(fileName1, data1, dataSize1, 0, 0);
-    fileSystemMutex.unlock();
+    while (true)
+    {
+        std::cout << "\nEnter a command: ";
+        std::string command;
+        std::getline(std::cin, command);
 
-    // Test case 2: Creating a directory
-    std::string dirName = "directory1";
-    fileSystemMutex.lock();
-    DirectoryManager::createDirectory(dirName, 0, 0);
-    fileSystemMutex.unlock();
+        std::vector<std::string> tokens;
+        std::istringstream iss(command);
+        std::string token;
+        while (std::getline(iss, token, ' '))
+        {
+            tokens.push_back(token);
+        }
 
-    // Test case 3: Creating a file with large data
-    std::string fileName3 = "file2.txt";
-    std::string data2 = "This is a large file with more than 10 blocks of data.";
-    size_t dataSize2 = data2.length();
-    fileSystemMutex.lock();
-    FileManager::createFile(fileName3, data2.c_str(), dataSize2, 0, 0);
-    fileSystemMutex.unlock();
+        if (tokens.empty())
+        {
+            continue;
+        }
 
-    // Test case 4: Creating a file when no free inode is available
-    for (int i = 0; i < MAX_FILES; ++i) {
-        std::string fileName = "file" + std::to_string(i) + ".txt";
-        std::string data = "This is the content of file" + std::to_string(i) + ".";
-        size_t dataSize = data.length();
-        fileSystemMutex.lock();
-        FileManager::createFile(fileName, data.c_str(), dataSize, 0, 0);
-        fileSystemMutex.unlock();
+        std::string operation = tokens[0];
+
+        if (operation == "create")
+        {
+            if (tokens.size() < 3)
+            {
+                std::cout << "Usage: create <filename> <content>" << std::endl;
+                continue;
+            }
+            std::string fileName = tokens[1];
+            std::string data = tokens[2];
+
+            fileSystemMutex.lock();
+            FileManager::createFile(fileName, data.c_str(), data.length(), 0, 0);
+            fileSystemMutex.unlock();
+        }
+        else if (operation == "read")
+        {
+            if (tokens.size() < 2)
+            {
+                std::cout << "Usage: read <filename>" << std::endl;
+                continue;
+            }
+            std::string fileName = tokens[1];
+
+            fileSystemMutex.lock();
+            FileManager::readFile(fileName);
+            fileSystemMutex.unlock();
+        }
+        else if (operation == "delete")
+        {
+            if (tokens.size() < 2)
+            {
+                std::cout << "Usage: delete <filename>" << std::endl;
+                continue;
+            }
+            std::string fileName = tokens[1];
+
+            fileSystemMutex.lock();
+            FileManager::deleteFile(fileName);
+            fileSystemMutex.unlock();
+        }
+        else if (operation == "mkdir")
+        {
+            if (tokens.size() < 2)
+            {
+                std::cout << "Usage: mkdir <directory>" << std::endl;
+                continue;
+            }
+            std::string dirName = tokens[1];
+
+            fileSystemMutex.lock();
+            DirectoryManager::createDirectory(dirName, 0, 0);
+            fileSystemMutex.unlock();
+        }
+        else if (operation == "ls")
+        {
+            if (tokens.size() < 2)
+            {
+                std::cout << "Usage: ls <directory>" << std::endl;
+                continue;
+            }
+            std::string dirName = tokens[1];
+
+            fileSystemMutex.lock();
+            DirectoryManager::listDirectory(dirName);
+            fileSystemMutex.unlock();
+        }
+        else if (operation == "help")
+        {
+            displayHelp();
+        }
+        else if (operation == "exit")
+        {
+            break;
+        }
+        else
+        {
+            std::cout << "Invalid command. Type 'help' for available commands." << std::endl;
+        }
     }
-
-    // Test case 5: Listing a directory
-    fileSystemMutex.lock();
-    DirectoryManager::addDirectoryEntry(DirectoryManager::fileInodeMap[dirName], "file1.txt", DirectoryManager::fileInodeMap[fileName1], false);
-    DirectoryManager::addDirectoryEntry(DirectoryManager::fileInodeMap[dirName], "subdir", DirectoryManager::fileInodeMap[dirName], true);
-    DirectoryManager::listDirectory(dirName);
-    fileSystemMutex.unlock();
-
-    // Test case 6: Deleting a file
-    fileSystemMutex.lock();
-    FileManager::deleteFile(fileName1);
-    fileSystemMutex.unlock();
 
     DirectoryManager::blockDevice.close();
     return 0;

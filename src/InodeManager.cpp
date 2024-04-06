@@ -1,4 +1,5 @@
 #include "../include/InodeManager.h"
+#include "../include/config.h"
 #include <cstring>
 
 std::vector<Inode> InodeManager::inodes;
