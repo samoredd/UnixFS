@@ -2,7 +2,6 @@
 #define INODE_MANAGER_H
 
 #include <vector>
-#include "config.h"
 
 struct Inode {
     int id;
